@@ -1,6 +1,6 @@
 // Backend address. On your own computer it talks to localhost; once deployed,
 // set PROD_API_BASE to your Render backend URL (e.g. https://podio-backend.onrender.com).
-const PROD_API_BASE = "https://YOUR-BACKEND.onrender.com";
+const PROD_API_BASE = "https://podio-7fkz.onrender.com";
 const IS_LOCAL = ["localhost", "127.0.0.1", ""].includes(
   window.location.hostname,
 );
