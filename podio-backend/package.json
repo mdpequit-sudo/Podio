@@ -1,0 +1,23 @@
+{
+  "name": "podio-backend",
+  "version": "2.0.0",
+  "description": "Backend API for the Podio co-working space front desk system (Express + Postgres/Supabase)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "migrate": "node migrate-from-sqlite.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "pg": "^8.16.0",
+    "resend": "^6.26.0"
+  }
+}

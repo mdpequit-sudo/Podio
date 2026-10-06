@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Podio.</title>
+    <link rel="icon" href="podioO.jpg" type="image/x-icon" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="connBanner" class="conn-banner">
+      ⚠ Can't reach the server. Retrying…
+    </div>
+
+    <div class="wrap">
+      <div class="header">
+        <div class="logo-block">
+          <img class="biz-logo" src="podio.jpg" alt="Podio. Co-Working Space" />
+        </div>
+        <div class="header-right">
+          <div class="clock" id="clock">--:--:--</div>
+          <div class="revenue">
+            Today's Revenue <b id="todayRevenue">₱0.00</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- Occupancy summary -->
+      <div class="summary-bar" id="summaryBar"></div>
+
+      <!-- Reservations -->
+      <div class="section-title">
+        Reservations <span class="count-badge" id="resCount">0</span>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Customer</label>
+          <input id="resName" type="text" placeholder="Customer name" />
+        </div>
+        <div class="field">
+          <label>Email (optional)</label>
+          <input id="resEmail" type="email" placeholder="For confirmation" />
+        </div>
+        <div class="field">
+          <label>Podio Bundles</label>
+          <select
+            id="resStation"
+            onchange="
+              updateRateHint('resStation', 'resRateHint');
+              updateResAvailability();
+            "
+          >
+            <option value="Podio Pod" data-rate="50">Podio Pod</option>
+            <option value="Podio Nook" data-rate="50">Podio Nook</option>
+            <option value="Podio Solo" data-rate="50">Podio Solo</option>
+            <option value="Podio Quad" data-rate="50">Podio Quad</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date</label>
+          <input id="resDate" type="date" oninput="updateResAvailability()" />
+        </div>
+        <div class="field">
+          <label>Time</label>
+          <input
+            id="resTime"
+            type="time"
+            step="300"
+            oninput="updateResAvailability()"
+          />
+        </div>
+        <div class="field">
+          <label>Hours</label>
+          <input
+            id="resHours"
+            type="number"
+            min="1"
+            step="1"
+            placeholder="₱50/hr"
+            oninput="updateResAvailability()"
+          />
+        </div>
+        <button
+          class="btn btn-primary"
+          id="resAddBtn"
+          onclick="addReservation()"
+        >
+          Add Reservation
+        </button>
+      </div>
+      <div class="capacity-warning" id="resAvailMsg"></div>
+
+      <div class="grid" id="resGrid" style="margin-top: 16px"></div>
+
+      <!-- New Walk-in -->
+      <div class="section-title">
+        Walk-ins Clients<span class="count-badge" id="activeCount">0</span>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Customer</label>
+          <input id="wiName" type="text" placeholder="Customer name" />
+        </div>
+        <div class="field">
+          <label>Podio Bundles</label>
+          <select
+            id="wiStation"
+            onchange="
+              updateRateHint('wiStation', 'wiRateHint');
+              updateWalkInAvailability();
+            "
+          >
+            <option value="Podio Pod" data-rate="50">Podio Pod</option>
+            <option value="Podio Nook" data-rate="50">Podio Nook</option>
+            <option value="Podio Solo" data-rate="50">Podio Solo</option>
+            <option value="Podio Quad" data-rate="50">Podio Quad</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Hours </label>
+          <input
+            id="wiHours"
+            type="number"
+            min="1"
+            step="1"
+            placeholder="₱50/hr"
+            oninput="updateWalkInAvailability()"
+          />
+        </div>
+        <button class="btn btn-primary" id="wiStartBtn" onclick="startWalkIn()">
+          Start Session
+        </button>
+      </div>
+      <div class="capacity-warning" id="wiAvailMsg"></div>
+
+      <div class="section-title" style="margin-top: 20px">Active Session</div>
+      <div class="grid" id="activeGrid" style="margin-top: 16px"></div>
+
+      <!-- Log -->
+      <div class="section-title">
+        Today's Log <span class="count-badge" id="logCount">0</span>
+      </div>
+      <table id="logTable">
+        <thead>
+          <tr>
+            <th>Customer</th>
+            <th>Station</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Duration</th>
+            <th style="text-align: right">Total</th>
+            <th>Payment</th>
+            <th>Feedback</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+      <div class="empty" id="logEmpty" style="display: none; margin-top: 8px">
+        No sessions has been done yet.
+      </div>
+
+      <div class="foot-note">
+        Your productivity starts here. Podio is go-to coworking space for work,
+        study, meetings, and collaboration.
+      </div>
+    </div>
+
+    <!-- Confirm modal -->
+    <div id="confirmOverlay" class="modal-overlay">
+      <div class="modal-box">
+        <div class="modal-title" id="confirmTitle">Are you sure?</div>
+        <div class="modal-body" id="confirmBody"></div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="confirmCancelBtn">Cancel</button>
+          <button class="btn btn-end" id="confirmOkBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback modal -->
+    <div id="feedbackOverlay" class="modal-overlay">
+      <div class="modal-box">
+        <div class="modal-title" id="fbTitle">How was your visit?</div>
+        <div class="star-row" id="fbStars">
+          <button type="button" class="star" data-value="1">★</button>
+          <button type="button" class="star" data-value="2">★</button>
+          <button type="button" class="star" data-value="3">★</button>
+          <button type="button" class="star" data-value="4">★</button>
+          <button type="button" class="star" data-value="5">★</button>
+        </div>
+        <textarea
+          id="fbComment"
+          class="fb-comment"
+          maxlength="1000"
+          placeholder="Anything we can improve? (optional)"
+        ></textarea>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="fbCancelBtn">Skip</button>
+          <button class="btn btn-primary" id="fbSubmitBtn">Submit</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
