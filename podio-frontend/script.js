@@ -423,13 +423,51 @@ async function cancelReservation(id, customerName) {
   await refresh();
 }
 
-// ---------- Online payments ----------
-// kind is "reservation" or "session". Opens the PayMongo checkout page in a new tab.
+// ---------- Payments (cash + online) ----------
+// kind is "reservation" or "session".
+
+// Balance still unpaid for a reservation or a completed session.
+function getBalance(kind, id) {
+  const rec =
+    kind === "reservation"
+      ? latestState.reservations.find((x) => x.id === id)
+      : latestState.completed.find((x) => x.id === id);
+  if (!rec) return null;
+  const total =
+    kind === "reservation"
+      ? Math.round(rec.ratePerHour * (rec.hours || 1) * 100) / 100
+      : rec.total;
+  const paidAmt = (latestState.paid || {})[id] || 0;
+  return { rec, balance: Math.round((total - paidAmt) * 100) / 100 };
+}
+
+// Staff confirms they received the money in cash; the server records it as paid.
+async function payCash(kind, id) {
+  const info = getBalance(kind, id);
+  if (!info || info.balance <= 0) return;
+  const ok = await showConfirm(
+    "Collect cash payment?",
+    `Confirm you received ${money(info.balance)} in cash from ${info.rec.customerName}.`,
+  );
+  if (!ok) return;
+
+  try {
+    await apiPost(`/api/payments/${kind}/${id}`, { method: "cash" });
+    toast(`Cash payment of ${money(info.balance)} recorded.`);
+    await refresh();
+  } catch (e) {
+    toast(e.message, "error");
+  }
+}
+
+// Opens the PayMongo checkout page in a new tab.
 // The tab is opened first (synchronously) so popup blockers don't stop it.
 async function payOnline(kind, id) {
   const win = window.open("", "_blank");
   try {
-    const { checkoutUrl } = await apiPost(`/api/payments/${kind}/${id}`);
+    const { checkoutUrl } = await apiPost(`/api/payments/${kind}/${id}`, {
+      method: "online",
+    });
     if (win) win.location.href = checkoutUrl;
     else window.location.href = checkoutUrl;
     toast("Payment page opened. It will show as Paid once confirmed.");
@@ -592,7 +630,7 @@ function render() {
           const payLine =
             balance <= 0
               ? `<div class="pay-line"><span class="ticket-status status-active">Paid ${money(paidAmt)}</span></div>`
-              : `<div class="pay-line"><button class="btn btn-primary btn-sm" onclick="payOnline('reservation','${r.id}')">Pay Online ${money(balance)}</button></div>`;
+              : `<div class="pay-line"><button class="btn btn-checkin btn-sm" onclick="payCash('reservation','${r.id}')">Cash ${money(balance)}</button><button class="btn btn-primary btn-sm" onclick="payOnline('reservation','${r.id}')">Online</button></div>`;
           return `
       <div class="ticket">
         <div class="ticket-top">
@@ -633,7 +671,7 @@ function render() {
         } else if (balance <= 0) {
           payCell = '<span class="ticket-status status-active">Paid</span>';
         } else {
-          payCell = `<button class="btn btn-primary btn-xs" onclick="payOnline('session','${s.id}')">Pay ${money(balance)}</button>`;
+          payCell = `<div class="pay-cell"><button class="btn btn-checkin btn-xs" onclick="payCash('session','${s.id}')">Cash ${money(balance)}</button><button class="btn btn-primary btn-xs" onclick="payOnline('session','${s.id}')">Online</button></div>`;
         }
         const rateCell = rated.includes(s.id)
           ? '<span class="muted">★ Rated</span>'
