@@ -89,6 +89,9 @@ async function init() {
       "createdAt" BIGINT NOT NULL
     );
 
+    -- How the customer paid: 'online' (PayMongo) or 'cash'. Existing rows count as online.
+    ALTER TABLE payments ADD COLUMN IF NOT EXISTS method TEXT NOT NULL DEFAULT 'online';
+
     CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions (status);
     CREATE INDEX IF NOT EXISTS idx_payments_ref ON payments ("refId");
     CREATE INDEX IF NOT EXISTS idx_payments_provider ON payments ("providerRef");

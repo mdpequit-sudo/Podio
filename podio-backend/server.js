@@ -254,6 +254,16 @@ app.post("/api/reservations/:id/checkin", async (req, res) => {
 
 app.delete("/api/reservations/:id", async (req, res) => {
   await db.run(`DELETE FROM reservations WHERE id = $1`, [req.params.id]);
+  // Keep the payment records but flag them: money already received needs a
+  // refund, and any open checkout link is cancelled.
+  await db.run(
+    `UPDATE payments SET status = 'refund_due' WHERE "refId" = $1 AND status = 'paid'`,
+    [req.params.id],
+  );
+  await db.run(
+    `UPDATE payments SET status = 'cancelled' WHERE "refId" = $1 AND status = 'pending'`,
+    [req.params.id],
+  );
   res.status(204).end();
 });
 
