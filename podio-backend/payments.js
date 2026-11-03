@@ -47,7 +47,7 @@ async function startPayment(res, info) {
   if (!process.env.PAYMONGO_SECRET_KEY) {
     return res
       .status(503)
-      .json({ error: "Online payments are not configured." });
+      .json({ error: `Could not start payment: ${err.message}` });
   }
 
   if (amount < MIN_ONLINE_AMOUNT) {
@@ -69,7 +69,7 @@ async function startPayment(res, info) {
     console.error("[payments]", err.message);
     return res
       .status(502)
-      .json({ error: "Could not start payment. Try again." });
+      .json({ error: `Could not start payment: ${err.message}` });
   }
 }
 
@@ -147,8 +147,9 @@ async function createCheckout({
     },
     body: JSON.stringify({ data: { attributes } }),
   });
-  const json = await resp.json();
+  const json = await resp.json().catch(() => ({}));
   if (!resp.ok) {
+    console.error("[payments] PayMongo response:", JSON.stringify(json));
     throw new Error(
       json.errors?.[0]?.detail || `PayMongo error ${resp.status}`,
     );
