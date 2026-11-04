@@ -47,7 +47,7 @@ async function startPayment(res, info) {
   if (!process.env.PAYMONGO_SECRET_KEY) {
     return res
       .status(503)
-      .json({ error: `Could not start payment: ${err.message}` });
+      .json({ error: "Online payments are not configured." });
   }
 
   if (amount < MIN_ONLINE_AMOUNT) {
