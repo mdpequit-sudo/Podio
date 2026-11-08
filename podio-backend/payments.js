@@ -173,7 +173,7 @@ router.post("/reservation/:id", async (req, res) => {
     });
 
   const balance =
-    Math.round((r.ratePerHour * r.hours - (await paidSoFar(r.id))) * 100) / 100;
+    Math.round((r.ratePerHour - (await paidSoFar(r.id))) * 100) / 100; // fixed fee
   if (balance <= 0) return res.status(409).json({ error: "Already paid." });
 
   await collectPayment(req, res, {

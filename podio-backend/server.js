@@ -166,14 +166,14 @@ app.post("/api/sessions/walkin", async (req, res) => {
   res.status(201).json(session);
 });
 
-// Podio billing rule: the first 15 minutes are free; once a session goes past
-// that, every started hour is charged in full. (16 min = 1 hr, 1h16m = 2 hrs.)
-// Change GRACE_MINUTES if the grace period ever changes.
+// Podio billing rule: a session costs a fixed fee (the station's rate, ₱50).
+// The first 15 minutes are free; once a session goes past that, the fixed fee
+// is charged, however long the session lasts. Change GRACE_MINUTES if the
+// grace period ever changes.
 const GRACE_MINUTES = 15;
-function billedHours(elapsedMs) {
+function sessionFee(elapsedMs, fixedFee) {
   const minutes = elapsedMs / 60000;
-  if (minutes <= GRACE_MINUTES) return 0;
-  return Math.ceil((minutes - GRACE_MINUTES) / 60);
+  return minutes <= GRACE_MINUTES ? 0 : fixedFee;
 }
 
 app.post("/api/sessions/:id/end", async (req, res) => {
@@ -185,8 +185,10 @@ app.post("/api/sessions/:id/end", async (req, res) => {
     return res.status(409).json({ error: "Session already ended." });
 
   const endTime = Date.now();
-  const hours = billedHours(endTime - session.startTime);
-  const total = Math.round(session.ratePerHour * hours * 100) / 100;
+  const total =
+    Math.round(
+      sessionFee(endTime - session.startTime, session.ratePerHour) * 100,
+    ) / 100;
 
   await db.run(
     `UPDATE sessions SET status = 'completed', "endTime" = $1, total = $2 WHERE id = $3`,

@@ -24,8 +24,8 @@ async function sendReservationConfirmation(reservation) {
     return { sent: false };
   }
 
-  const total =
-    Math.round(reservation.ratePerHour * reservation.hours * 100) / 100;
+  // Fixed fee: the station's rate, however many hours are booked.
+  const total = Math.round(reservation.ratePerHour * 100) / 100;
 
   try {
     await resend.emails.send({
