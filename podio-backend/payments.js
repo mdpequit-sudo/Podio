@@ -4,14 +4,20 @@ const db = require("./db");
 const { uid } = require("./logic");
 
 // Mounted at /api/payments. Everything except /webhook needs the staff PIN
-// (applied in server.js). The webhook is protected by PayMongo's signature.
+// (applied in server.js). The webhook is protected by Xendit's callback token.
+//
+// Online payments use Xendit invoices (GCash, Maya, cards...).
+// Render environment variables:
+//   XENDIT_SECRET_KEY      secret API key (xnd_development_... in test mode)
+//   XENDIT_CALLBACK_TOKEN  the "verification token" from Xendit's webhook settings
+//   FRONTEND_URL           the dashboard's address, used for the redirect back
 const router = express.Router();
-const PAYMONGO_URL = "https://api.paymongo.com/v1";
+const XENDIT_URL = "https://api.xendit.co/v2/invoices";
 
 function authHeader() {
   return (
     "Basic " +
-    Buffer.from(`${process.env.PAYMONGO_SECRET_KEY}:`).toString("base64")
+    Buffer.from(`${process.env.XENDIT_SECRET_KEY}:`).toString("base64")
   );
 }
 
@@ -23,8 +29,8 @@ async function paidSoFar(refId) {
   return Number(row.paid);
 }
 
-// PayMongo rejects very small checkouts (minimum is ₱20). Below this, staff
-// should collect the balance in cash instead.
+// Very small online payments are not worth sending to the gateway (and may be
+// rejected by it). Below this, staff should collect the balance in cash instead.
 const MIN_ONLINE_AMOUNT = 20;
 // Reuse a still-pending checkout link instead of creating a second one, so
 // pressing Pay twice can't lead to the customer paying twice.
@@ -40,11 +46,11 @@ async function findReusableCheckout(refId, amount) {
 }
 
 // Shared by both pay routes: checks the amount, reuses a pending link if one
-// exists, otherwise creates a new PayMongo checkout.
+// exists, otherwise creates a new Xendit invoice (payment link).
 async function startPayment(res, info) {
   const { refId, amount } = info;
 
-  if (!process.env.PAYMONGO_SECRET_KEY) {
+  if (!process.env.XENDIT_SECRET_KEY) {
     return res
       .status(503)
       .json({ error: "Online payments are not configured." });
@@ -117,49 +123,39 @@ async function createCheckout({
     process.env.FRONTEND_URL || "http://127.0.0.1:5500"
   ).replace(/\/$/, "");
 
-  const attributes = {
-    line_items: [
-      {
-        currency: "PHP",
-        amount: Math.round(amount * 100), // centavos
-        name: `Podio - ${station}`,
-        quantity: 1,
-      },
-    ],
-    payment_method_types: ["gcash", "paymaya", "card"],
-    description: `${kind} payment for ${customerName}`,
-    reference_number: paymentId,
-    success_url: `${frontend}/?payment=success&ref=${refId}`,
-    cancel_url: `${frontend}/?payment=cancelled&ref=${refId}`,
-    metadata: { paymentId, refId, kind },
+  // external_id is our own payment id, so the webhook can find this payment.
+  const body = {
+    external_id: paymentId,
+    amount: Math.round(amount * 100) / 100, // pesos
+    currency: "PHP",
+    description: `Podio - ${station} (${kind} payment for ${customerName})`,
+    success_redirect_url: `${frontend}/?payment=success&ref=${refId}`,
+    failure_redirect_url: `${frontend}/?payment=cancelled&ref=${refId}`,
+    invoice_duration: 3600, // the payment link stays valid for 1 hour
   };
-  if (email) {
-    attributes.billing = { name: customerName, email };
-    attributes.send_email_receipt = true;
-  }
+  if (email) body.payer_email = email;
 
-  const resp = await fetch(`${PAYMONGO_URL}/checkout_sessions`, {
+  const resp = await fetch(XENDIT_URL, {
     method: "POST",
     headers: {
       accept: "application/json",
       "content-type": "application/json",
       authorization: authHeader(),
     },
-    body: JSON.stringify({ data: { attributes } }),
+    body: JSON.stringify(body),
   });
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    console.error("[payments] PayMongo response:", JSON.stringify(json));
-    throw new Error(
-      json.errors?.[0]?.detail || `PayMongo error ${resp.status}`,
-    );
+    console.error("[payments] Xendit response:", JSON.stringify(json));
+    throw new Error(json.message || `Xendit error ${resp.status}`);
   }
 
-  const checkoutUrl = json.data.attributes.checkout_url;
+  const checkoutUrl = json.invoice_url;
+  if (!checkoutUrl) throw new Error("Xendit did not return a payment link.");
   await db.run(
     `INSERT INTO payments (id, kind, "refId", "providerRef", "checkoutUrl", amount, status, "createdAt")
      VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)`,
-    [paymentId, kind, refId, json.data.id, checkoutUrl, amount, Date.now()],
+    [paymentId, kind, refId, json.id, checkoutUrl, amount, Date.now()],
   );
 
   return { paymentId, checkoutUrl };
@@ -233,45 +229,53 @@ router.get("/status/:refId", async (req, res) => {
 });
 
 // ---------- Webhook ----------
-function verifySignature(req) {
-  const header = req.get("Paymongo-Signature");
-  if (!header || !req.rawBody || !process.env.PAYMONGO_WEBHOOK_SECRET)
+// Xendit sends your verification token in the x-callback-token header.
+function verifyCallback(req) {
+  // trim() guards against a stray space or newline pasted along with the token.
+  const expected = (process.env.XENDIT_CALLBACK_TOKEN || "").trim();
+  const given = (req.get("x-callback-token") || "").trim();
+
+  // The log lines below never print the token itself, only why it was refused.
+  if (!expected) {
+    console.error(
+      "[webhook] rejected: XENDIT_CALLBACK_TOKEN is not set on this server",
+    );
     return false;
+  }
+  if (!given) {
+    console.error("[webhook] rejected: request had no x-callback-token header");
+    return false;
+  }
 
-  const parts = Object.fromEntries(header.split(",").map((p) => p.split("=")));
-  const isLive = process.env.PAYMONGO_SECRET_KEY?.startsWith("sk_live");
-  const theirs = isLive ? parts.li : parts.te;
-  if (!parts.t || !theirs) return false;
-
-  const ours = crypto
-    .createHmac("sha256", process.env.PAYMONGO_WEBHOOK_SECRET)
-    .update(`${parts.t}.`)
-    .update(req.rawBody)
-    .digest("hex");
-
-  const a = Buffer.from(ours);
-  const b = Buffer.from(theirs);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (!ok) {
+    console.error(
+      `[webhook] rejected: token does not match (received ${given.length} chars ending "${given.slice(-4)}", server has ${expected.length} chars ending "${expected.slice(-4)}")`,
+    );
+  }
+  return ok;
 }
 
 router.post("/webhook", async (req, res) => {
-  if (!verifySignature(req)) return res.status(401).end();
+  console.log("[webhook] callback received");
+  if (!verifyCallback(req)) return res.status(401).end();
 
-  const attrs = req.body?.data?.attributes;
-  if (attrs?.type === "checkout_session.payment.paid") {
-    const checkoutId = attrs.data?.id;
-    // If the reservation was cancelled while this checkout was open, the money
+  const { id, external_id: externalId, status } = req.body || {};
+  if (status === "PAID" || status === "SETTLED") {
+    // If the reservation was cancelled while this invoice was open, the money
     // still arrived, so flag it for refund instead of counting it as paid.
     await db.run(
       `UPDATE payments
        SET status = CASE WHEN status = 'cancelled' THEN 'refund_due' ELSE 'paid' END,
            "paidAt" = $1
-       WHERE "providerRef" = $2 AND status NOT IN ('paid', 'refund_due')`,
-      [Date.now(), checkoutId],
+       WHERE (id = $2 OR "providerRef" = $3) AND status NOT IN ('paid', 'refund_due')`,
+      [Date.now(), externalId || "", id || ""],
     );
-    console.log(`[payments] Marked paid: ${checkoutId}`);
+    console.log(`[payments] Marked paid: ${externalId || id}`);
   }
-  // A thrown DB error above becomes a 500, so PayMongo retries the webhook.
+  // A thrown DB error above becomes a 500, so Xendit retries the callback.
   res.status(200).end();
 });
 
