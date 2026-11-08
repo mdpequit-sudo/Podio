@@ -504,9 +504,7 @@ function setFeedbackRating(n) {
 function openFeedback(sessionId) {
   const s = latestState.completed.find((x) => x.id === sessionId);
   feedbackSessionId = sessionId;
-  document.getElementById("fbTitle").textContent = s
-    ? `How was ${s.customerName}'s visit?`
-    : "How was your visit?";
+  document.getElementById("fbTitle").textContent = "How was your visit?";
   document.getElementById("fbComment").value = "";
   setFeedbackRating(0);
   document.getElementById("feedbackOverlay").classList.add("show");
