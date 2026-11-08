@@ -435,7 +435,7 @@ function getBalance(kind, id) {
   if (!rec) return null;
   const total =
     kind === "reservation"
-      ? Math.round(rec.ratePerHour * (rec.hours || 1) * 100) / 100
+      ? Math.round(rec.ratePerHour * 100) / 100
       : rec.total;
   const paidAmt = (latestState.paid || {})[id] || 0;
   return { rec, balance: Math.round((total - paidAmt) * 100) / 100 };
@@ -567,7 +567,7 @@ function renderActiveTicket(s) {
         <div class="ticket-timer" data-start="${s.startTime}" data-rate="${s.ratePerHour}" data-planned="${s.plannedHours || ""}" data-id="${s.id}">${fmtElapsed(elapsed)}</div>
         ${
           s.plannedHours
-            ? `<div class="ticket-planned">Hours Occupied: ${fmtHours(s.plannedHours)} <span class="muted">(${money(s.ratePerHour * s.plannedHours)})</span> · <span class="live-remaining">${fmtRemaining(elapsed, s.plannedHours)}</span></div>`
+            ? `<div class="ticket-planned">Hours Occupied: ${fmtHours(s.plannedHours)} <span class="muted">(fixed ${money(s.ratePerHour)})</span> · <span class="live-remaining">${fmtRemaining(elapsed, s.plannedHours)}</span></div>`
             : ""
         }
         ${
@@ -624,7 +624,7 @@ function render() {
     ? pending
         .map((r) => {
           const hours = r.hours || 1;
-          const total = Math.round(r.ratePerHour * hours * 100) / 100;
+          const total = Math.round(r.ratePerHour * 100) / 100; // fixed fee
           const paidAmt = paid[r.id] || 0;
           const balance = Math.round((total - paidAmt) * 100) / 100;
           const payLine =
@@ -641,7 +641,7 @@ function render() {
           <div class="ticket-status status-pending">Booked</div>
         </div>
         <div class="res-time">🗓️ ${fmtResDate(r.date)} · ⏱️ ${r.time}</div>
-        <div class="ticket-cost">${pesoPlain(r.ratePerHour)} <span class="muted">× ${fmtHours(hours)}</span> = <b>${money(total)}</b></div>
+        <div class="ticket-cost">Fixed fee <b>${money(total)}</b> <span class="muted">· ${fmtHours(hours)} booked</span></div>
         ${payLine}
         <div class="ticket-actions">
           <button class="btn btn-checkin" onclick="checkIn('${r.id}')">Check In</button>
