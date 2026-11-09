@@ -120,16 +120,17 @@ app.get("/api/availability", async (req, res) => {
 
 // ---------- Walk-ins ----------
 app.post("/api/sessions/walkin", async (req, res) => {
-  const { customerName, station, plannedHours } = req.body;
+  const { customerName, station } = req.body;
   if (!customerName?.trim())
     return res.status(400).json({ error: "Customer name required." });
   if (!isKnownStation(station))
     return res.status(400).json({ error: "Unknown station." });
 
   const now = Date.now();
-  const hours = Number(plannedHours) > 0 ? Number(plannedHours) : 1;
+  // Open time: no planned hours. Capacity is checked for the next hour so a
+  // walk-in can't be started right before a reservation takes the same seat.
   const capacity = getStationCapacity(station);
-  const booked = await getBookedCount(station, now, now + hours * 3600000);
+  const booked = await getBookedCount(station, now, now + 3600000);
 
   if (booked >= capacity) {
     return res
@@ -142,7 +143,7 @@ app.post("/api/sessions/walkin", async (req, res) => {
     customerName: customerName.trim(),
     station,
     ratePerHour: getStationRate(station), // price comes from the server, not the browser
-    plannedHours: hours,
+    plannedHours: null, // open time
     startTime: now,
     status: "active",
     source: "walkin",
@@ -185,10 +186,18 @@ app.post("/api/sessions/:id/end", async (req, res) => {
     return res.status(409).json({ error: "Session already ended." });
 
   const endTime = Date.now();
-  const total =
-    Math.round(
-      sessionFee(endTime - session.startTime, session.ratePerHour) * 100,
-    ) / 100;
+  const elapsedMs = endTime - session.startTime;
+  let fee = sessionFee(elapsedMs, session.ratePerHour);
+
+  // Excess time: a reservation prepays its booked hours. If the customer stays
+  // longer, every extra hour started past the booking adds another fixed fee.
+  if (session.source === "reservation" && session.plannedHours) {
+    const overMs = elapsedMs - session.plannedHours * 3600000;
+    if (overMs > 0) {
+      fee += Math.ceil(overMs / 3600000) * session.ratePerHour;
+    }
+  }
+  const total = Math.round(fee * 100) / 100;
 
   await db.run(
     `UPDATE sessions SET status = 'completed', "endTime" = $1, total = $2 WHERE id = $3`,
