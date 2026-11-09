@@ -209,7 +209,7 @@ app.post("/api/sessions/:id/end", async (req, res) => {
 
 // ---------- Reservations ----------
 app.post("/api/reservations", async (req, res) => {
-  const { customerName, email, station, hours, date, time } = req.body;
+  const { customerName, email, station, date, time } = req.body;
   if (!customerName?.trim())
     return res.status(400).json({ error: "Customer name required." });
   if (!isKnownStation(station))
@@ -217,7 +217,9 @@ app.post("/api/reservations", async (req, res) => {
   if (!DATE_RE.test(date || "") || !TIME_RE.test(time || ""))
     return res.status(400).json({ error: "Date and time required." });
 
-  const h = Number(hours) > 0 ? Number(hours) : 1;
+  // Open time: the slot is held for 1 hour (the fee covers it); every extra
+  // hour is charged when the session ends.
+  const h = 1;
   const start = new Date(`${date}T${time}`).getTime();
   if (Number.isNaN(start))
     return res.status(400).json({ error: "Invalid date or time." });
