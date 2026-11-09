@@ -286,8 +286,7 @@ async function updateResAvailability() {
   const station = document.getElementById("resStation").value;
   const date = document.getElementById("resDate").value;
   const time = document.getElementById("resTime").value;
-  const hoursRaw = parseFloat(document.getElementById("resHours").value);
-  const hours = hoursRaw > 0 ? hoursRaw : 1;
+  const hours = 1; // reservations are open time; the slot is held for 1 hour
 
   const msgEl = document.getElementById("resAvailMsg");
   const btn = document.getElementById("resAddBtn");
@@ -366,7 +365,6 @@ async function addReservation() {
   const date = document.getElementById("resDate").value;
   const time = document.getElementById("resTime").value;
   const rate = getStationRate("resStation");
-  const hours = parseFloat(document.getElementById("resHours").value) || 1;
   if (!name || !date || !time) {
     toast("Enter a customer name, date, and time.", "error");
     return;
@@ -378,7 +376,6 @@ async function addReservation() {
       email,
       station,
       ratePerHour: rate,
-      hours,
       date,
       time,
     });
@@ -387,7 +384,6 @@ async function addReservation() {
     document.getElementById("resStation").selectedIndex = 0;
     document.getElementById("resDate").value = "";
     document.getElementById("resTime").value = "";
-    document.getElementById("resHours").value = "";
     updateRateHint("resStation", "resRateHint");
     toast(`Reservation added for ${name}.`);
     await refresh();
@@ -635,7 +631,7 @@ function render() {
           <div class="ticket-status status-pending">Booked</div>
         </div>
         <div class="res-time">🗓️ ${fmtResDate(r.date)} · ⏱️ ${r.time}</div>
-        <div class="ticket-cost">Fixed fee <b>${money(total)}</b> <span class="muted">· ${fmtHours(hours)} booked</span></div>
+        <div class="ticket-cost">Fixed fee <b>${money(total)}</b> <span class="muted">· first hour included</span></div>
         ${payLine}
         <div class="ticket-actions">
           <button class="btn btn-checkin" onclick="checkIn('${r.id}')">Check In</button>
@@ -714,12 +710,13 @@ function tickTimers() {
 
 document.addEventListener("DOMContentLoaded", () => {
   // Walk-ins are open time, so the "hours" box is not needed: hide it.
-  const wiHours = document.getElementById("wiHours");
-  if (wiHours) {
-    const box = wiHours.parentElement;
+  for (const id of ["wiHours", "resHours"]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const box = el.parentElement;
     const alone = box && box.querySelectorAll("input, select").length === 1;
-    (alone ? box : wiHours).style.display = "none";
-    const lbl = document.querySelector('label[for="wiHours"]');
+    (alone ? box : el).style.display = "none";
+    const lbl = document.querySelector(`label[for="${id}"]`);
     if (lbl) lbl.style.display = "none";
   }
   updateRateHint("wiStation", "wiRateHint");
