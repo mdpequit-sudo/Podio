@@ -631,7 +631,7 @@ function render() {
           <div class="ticket-status status-pending">Booked</div>
         </div>
         <div class="res-time">🗓️ ${fmtResDate(r.date)} · ⏱️ ${r.time}</div>
-        <div class="ticket-cost">Fixed fee <b>${money(total)}</b> <span class="muted">· first hour included</span></div>
+        <div class="ticket-cost">Fixed fee <b>${money(total)}</b> <span class="muted">· open time</span></div>
         ${payLine}
         <div class="ticket-actions">
           <button class="btn btn-checkin" onclick="checkIn('${r.id}')">Check In</button>
