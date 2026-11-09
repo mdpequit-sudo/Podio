@@ -260,8 +260,8 @@ function updateRateHint(selectId, hintId) {
 // ---------- Availability ----------
 async function updateWalkInAvailability() {
   const station = document.getElementById("wiStation").value;
-  const hoursRaw = parseFloat(document.getElementById("wiHours").value);
-  const plannedHours = hoursRaw > 0 ? hoursRaw : 1;
+  // Walk-ins are open time: capacity is checked for the next hour only.
+  const plannedHours = 1;
   const now = Date.now();
 
   const avail = await apiGet(
@@ -321,8 +321,6 @@ async function startWalkIn() {
   const name = document.getElementById("wiName").value.trim();
   const station = document.getElementById("wiStation").value.trim();
   const rate = getStationRate("wiStation");
-  const plannedHours =
-    parseFloat(document.getElementById("wiHours").value) || 1;
   if (!name) {
     toast("Enter a customer name.", "error");
     return;
@@ -333,11 +331,9 @@ async function startWalkIn() {
       customerName: name,
       station,
       ratePerHour: rate,
-      plannedHours,
     });
     document.getElementById("wiName").value = "";
     document.getElementById("wiStation").selectedIndex = 0;
-    document.getElementById("wiHours").value = "";
     updateRateHint("wiStation", "wiRateHint");
     toast(`${name} checked in to ${station}.`);
     await refresh();
@@ -717,6 +713,15 @@ function tickTimers() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Walk-ins are open time, so the "hours" box is not needed: hide it.
+  const wiHours = document.getElementById("wiHours");
+  if (wiHours) {
+    const box = wiHours.parentElement;
+    const alone = box && box.querySelectorAll("input, select").length === 1;
+    (alone ? box : wiHours).style.display = "none";
+    const lbl = document.querySelector('label[for="wiHours"]');
+    if (lbl) lbl.style.display = "none";
+  }
   updateRateHint("wiStation", "wiRateHint");
   updateRateHint("resStation", "resRateHint");
   initFeedbackModal();
