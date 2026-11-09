@@ -187,16 +187,8 @@ app.post("/api/sessions/:id/end", async (req, res) => {
 
   const endTime = Date.now();
   const elapsedMs = endTime - session.startTime;
-  let fee = sessionFee(elapsedMs, session.ratePerHour);
-
-  // Excess time: a reservation prepays its booked hours. If the customer stays
-  // longer, every extra hour started past the booking adds another fixed fee.
-  if (session.source === "reservation" && session.plannedHours) {
-    const overMs = elapsedMs - session.plannedHours * 3600000;
-    if (overMs > 0) {
-      fee += Math.ceil(overMs / 3600000) * session.ratePerHour;
-    }
-  }
+  // Open time: reservations and walk-ins both pay the fixed fee, however long.
+  const fee = sessionFee(elapsedMs, session.ratePerHour);
   const total = Math.round(fee * 100) / 100;
 
   await db.run(
@@ -217,8 +209,7 @@ app.post("/api/reservations", async (req, res) => {
   if (!DATE_RE.test(date || "") || !TIME_RE.test(time || ""))
     return res.status(400).json({ error: "Date and time required." });
 
-  // Open time: the slot is held for 1 hour (the fee covers it); every extra
-  // hour is charged when the session ends.
+  // Open time: no booked hours. The seat is held for 1 hour for availability.
   const h = 1;
   const start = new Date(`${date}T${time}`).getTime();
   if (Number.isNaN(start))

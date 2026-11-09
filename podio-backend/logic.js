@@ -120,7 +120,7 @@ async function performCheckIn(r) {
       customerName: r.customerName,
       station: r.station,
       ratePerHour: r.ratePerHour,
-      plannedHours: r.hours,
+      plannedHours: null, // open time
       startTime: schedStart,
       status: "active",
       source: "reservation",

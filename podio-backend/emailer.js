@@ -40,7 +40,7 @@ async function sendReservationConfirmation(reservation) {
             <tr><td style="padding:6px 0; color:#666;">Station</td><td style="padding:6px 0;"><b>${reservation.station}</b></td></tr>
             <tr><td style="padding:6px 0; color:#666;">Date</td><td style="padding:6px 0;">${fmtResDate(reservation.date)}</td></tr>
             <tr><td style="padding:6px 0; color:#666;">Time</td><td style="padding:6px 0;">${reservation.time}</td></tr>
-            <tr><td style="padding:6px 0; color:#666;">Stay</td><td style="padding:6px 0;">Open time (first hour included)</td></tr>
+            <tr><td style="padding:6px 0; color:#666;">Stay</td><td style="padding:6px 0;">Open time</td></tr>
             <tr><td style="padding:6px 0; color:#666;">Total</td><td style="padding:6px 0;"><b>₱${total.toFixed(2)}</b></td></tr>
           </table>
           <p style="color:#888; font-size:12px;">See you then! — Podio</p>
